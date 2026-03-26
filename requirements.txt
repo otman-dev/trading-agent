@@ -1,0 +1,19 @@
+# Core data & ML
+numpy
+pandas
+scikit-learn
+xgboost
+tensorflow
+fredapi
+alpaca-trade-api
+
+# Database & API
+sqlalchemy
+psycopg2-binary
+fastapi
+uvicorn
+python-dotenv
+
+# Optional
+# jupyter
+# matplotlib

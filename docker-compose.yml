@@ -1,0 +1,146 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: trading_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: trader
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: trading
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - trading_net
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    container_name: trading_api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://trader:${POSTGRES_PASSWORD}@postgres:5432/trading
+      FRED_API_KEY: ${FRED_API_KEY}
+      ALPACA_API_KEY_DATA: ${ALPACA_API_KEY_DATA}
+      ALPACA_SECRET_KEY_DATA: ${ALPACA_SECRET_KEY_DATA}
+      API_KEY: ${API_KEY}
+    volumes:
+      - model_data:/app/models
+      - ./logs:/app/logs
+    depends_on:
+      - postgres
+    networks:
+      - trading_net
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: scheduler/Dockerfile
+    container_name: trading_scheduler
+    restart: unless-stopped
+    environment:
+      PYTHONPATH: /app           # <-- add this line
+      DATABASE_URL: postgresql://trader:${POSTGRES_PASSWORD}@postgres:5432/trading
+      FRED_API_KEY: ${FRED_API_KEY}
+      ALPACA_API_KEY_DATA: ${ALPACA_API_KEY_DATA}
+      ALPACA_SECRET_KEY_DATA: ${ALPACA_SECRET_KEY_DATA}
+      MODEL_PATH: /app/models
+    volumes:
+      - model_data:/app/models
+      - ./logs:/app/logs
+    depends_on:
+      - postgres
+      - api
+    networks:
+      - trading_net
+
+  trading_agent_1:
+    build:
+      context: .
+      dockerfile: trading_agent/Dockerfile
+    container_name: trading_agent_1
+    restart: unless-stopped
+    environment:
+      AGENT_ID: 1
+      MODEL_TYPE: xgboost
+      DRY_RUN: ${DRY_RUN:-false}
+      TRADE_LIMIT_24H: ${TRADE_LIMIT_24H:-1}
+      MAX_OPEN_POSITIONS: ${MAX_OPEN_POSITIONS:-1}
+      TRADE_THRESHOLD: ${TRADE_THRESHOLD:-0.005}
+      HOLDING_DAYS: ${HOLDING_DAYS:-5}
+      DATABASE_URL: postgresql://trader:${POSTGRES_PASSWORD}@postgres:5432/trading
+      FRED_API_KEY: ${FRED_API_KEY}
+      ALPACA_API_KEY: ${ALPACA_API_KEY_1}
+      ALPACA_SECRET_KEY: ${ALPACA_SECRET_KEY_1}
+    volumes:
+      - model_data:/app/models
+      - ./logs:/app/logs
+    depends_on:
+      - postgres
+      - api
+    networks:
+      - trading_net
+
+  trading_agent_2:
+    build:
+      context: .
+      dockerfile: trading_agent/Dockerfile
+    container_name: trading_agent_2
+    restart: unless-stopped
+    environment:
+      AGENT_ID: 2
+      MODEL_TYPE: lstm
+      DRY_RUN: ${DRY_RUN:-false}
+      TRADE_LIMIT_24H: ${TRADE_LIMIT_24H:-1}
+      MAX_OPEN_POSITIONS: ${MAX_OPEN_POSITIONS:-1}
+      TRADE_THRESHOLD: ${TRADE_THRESHOLD:-0.005}
+      HOLDING_DAYS: ${HOLDING_DAYS:-5}
+      DATABASE_URL: postgresql://trader:${POSTGRES_PASSWORD}@postgres:5432/trading
+      FRED_API_KEY: ${FRED_API_KEY}
+      ALPACA_API_KEY: ${ALPACA_API_KEY_2}
+      ALPACA_SECRET_KEY: ${ALPACA_SECRET_KEY_2}
+    volumes:
+      - model_data:/app/models
+      - ./logs:/app/logs
+    depends_on:
+      - postgres
+      - api
+    networks:
+      - trading_net
+
+  trading_agent_3:
+    build:
+      context: .
+      dockerfile: trading_agent/Dockerfile
+    container_name: trading_agent_3
+    restart: unless-stopped
+    environment:
+      AGENT_ID: 3
+      MODEL_TYPE: ensemble
+      DRY_RUN: ${DRY_RUN:-false}
+      TRADE_LIMIT_24H: ${TRADE_LIMIT_24H:-1}
+      MAX_OPEN_POSITIONS: ${MAX_OPEN_POSITIONS:-1}
+      TRADE_THRESHOLD: ${TRADE_THRESHOLD:-0.005}
+      HOLDING_DAYS: ${HOLDING_DAYS:-5}
+      DATABASE_URL: postgresql://trader:${POSTGRES_PASSWORD}@postgres:5432/trading
+      FRED_API_KEY: ${FRED_API_KEY}
+      ALPACA_API_KEY: ${ALPACA_API_KEY_3}
+      ALPACA_SECRET_KEY: ${ALPACA_SECRET_KEY_3}
+    volumes:
+      - model_data:/app/models
+      - ./logs:/app/logs
+    depends_on:
+      - postgres
+      - api
+    networks:
+      - trading_net
+
+volumes:
+  pg_data:
+  model_data:
+
+networks:
+  trading_net:
+    driver: bridge
