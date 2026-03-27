@@ -63,6 +63,7 @@ services:
     container_name: trading_agent_1
     restart: unless-stopped
     environment:
+      PYTHONPATH: /app
       AGENT_ID: 1
       MODEL_TYPE: xgboost
       DRY_RUN: ${DRY_RUN:-false}
@@ -90,6 +91,7 @@ services:
     container_name: trading_agent_2
     restart: unless-stopped
     environment:
+      PYTHONPATH: /app
       AGENT_ID: 2
       MODEL_TYPE: lstm
       DRY_RUN: ${DRY_RUN:-false}
@@ -117,6 +119,7 @@ services:
     container_name: trading_agent_3
     restart: unless-stopped
     environment:
+      PYTHONPATH: /app
       AGENT_ID: 3
       MODEL_TYPE: ensemble
       DRY_RUN: ${DRY_RUN:-false}

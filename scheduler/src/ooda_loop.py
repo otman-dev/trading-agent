@@ -4,9 +4,9 @@ import logging
 from datetime import datetime
 from sqlalchemy.orm import Session
 from common.database import SessionLocal
-from .train import train_agent
-from .selection import select_best_versions
-from .drift import check_drift
+from src.train import train_agent
+from src.selection import select_best_versions
+from src.drift import check_drift
 from data_fetcher.src.combine import get_recent_data
 from data_fetcher.src.features import engineer_features
 

@@ -6,34 +6,12 @@ import xgboost as xgb
 import tensorflow as tf
 from sklearn.metrics import mean_squared_error
 from datetime import datetime
-from data_fetcher.src.fred import fetch_fred_long_term
-from data_fetcher.src.alpaca import fetch_alpaca_recent
-from data_fetcher.src.combine import create_unified_dataset
+from data_fetcher.src.combine import get_recent_data
 from data_fetcher.src.features import engineer_features
-from .selection import evaluate_version_on_recent, select_best_versions, get_best_version
+from src.selection import evaluate_version_on_recent, select_best_versions, get_best_version
 import logging
 
 logger = logging.getLogger(__name__)
-
-def load_model_for_agent(agent_id, model_type, version_path=None):
-    """Load the current model for an agent."""
-    if version_path is None:
-        current_symlink = f'/app/models/agent{agent_id}/current'
-        version_path = os.path.realpath(current_symlink)
-    if model_type == 'xgboost':
-        model = xgb.Booster()
-        model.load_model(f'{version_path}/model.json')
-        return model
-    elif model_type == 'lstm':
-        return tf.keras.models.load_model(f'{version_path}/model.h5')
-    elif model_type == 'ensemble':
-        # Return a tuple (xgb_model, lstm_model)
-        xgb_model = xgb.Booster()
-        xgb_model.load_model(f'{version_path}/xgb_model.json')
-        lstm_model = tf.keras.models.load_model(f'{version_path}/lstm_model.h5')
-        return xgb_model, lstm_model
-    else:
-        raise ValueError(f"Unknown model type {model_type}")
 
 def train_agent(agent_id, model_type, force=False):
     version_dir = f'/app/models/agent{agent_id}/versions'
@@ -49,13 +27,14 @@ def train_agent(agent_id, model_type, force=False):
                 logger.info(f"Agent {agent_id} retrained less than 24h ago, skipping.")
                 return
 
-    # Fetch and prepare data
-    df_fred = fetch_fred_long_term()
-    df_alpaca = fetch_alpaca_recent(['GC=F','CL=F','DX-Y.NYB','SPY'], days_back=90)
-    df_raw = create_unified_dataset(df_fred, df_alpaca)
-    df = engineer_features(df_raw)
+    # Fetch and prepare data (using only FRED, no Alpaca)
+    df = get_recent_data()
+    if df.empty:
+        logger.warning("No data available for training.")
+        return
+    df = engineer_features(df)
 
-    exclude = ['target', 'gold_return', 'gold']
+    exclude = ['target', 'oil_return', 'oil']
     feature_cols = [c for c in df.columns if c not in exclude]
     X = df[feature_cols]
     y = df['target']
@@ -74,8 +53,18 @@ def train_agent(agent_id, model_type, force=False):
 
     # Train according to model type
     if model_type == 'xgboost':
-        model = xgb.XGBRegressor(objective='reg:squarederror', n_estimators=200, max_depth=6)
-        model.fit(X_train, y_train, eval_set=[(X_val, y_val)], early_stopping_rounds=20, verbose=False)
+        model = xgb.XGBRegressor(
+            objective='reg:squarederror',
+            n_estimators=200,
+            max_depth=6,
+            early_stopping_rounds=20,
+            random_state=42
+        )
+        model.fit(
+            X_train, y_train,
+            eval_set=[(X_val, y_val)],
+            verbose=False
+        )
         model.save_model(f'{version_path}/model.json')
         preds = model.predict(X_val)
         rmse = np.sqrt(mean_squared_error(y_val, preds))
@@ -92,7 +81,7 @@ def train_agent(agent_id, model_type, force=False):
         y_train_seq, y_val_seq = y_seq[:split_seq], y_seq[split_seq:]
 
         # Build model
-        from models.lstm import build_lstm  # we'll create a placeholder
+        from models.lstm import build_lstm
         model = build_lstm((window, len(feature_cols)))
         model.fit(X_train_seq, y_train_seq, validation_data=(X_val_seq, y_val_seq),
                   epochs=50, batch_size=32, callbacks=[tf.keras.callbacks.EarlyStopping(patience=10)],
